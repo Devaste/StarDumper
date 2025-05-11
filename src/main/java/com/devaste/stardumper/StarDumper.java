@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraftforge.api.distmarker.Dist;
@@ -35,19 +34,17 @@ public class StarDumper {
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-        LOGGER.info("HELLO FROM COMMON SETUP");
-        // gatherRecipes больше здесь не вызываем — делаем это на старте сервера
+        LOGGER.info("Star Dumper Initialized");
     }
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-        LOGGER.info("HELLO from server starting");
+        LOGGER.info("Starting to gather recipes");
         gatherRecipes(event);
     }
 
     private void gatherRecipes(ServerStartingEvent event) {
         RecipeManager recipeManager = event.getServer().getRecipeManager();
-        RegistryAccess registryAccess = event.getServer().registryAccess();
         Collection<Recipe<?>> recipes = recipeManager.getRecipes();
 
         Map<String, List<Map<String, Object>>> recipesByType = new HashMap<>();
@@ -55,9 +52,9 @@ public class StarDumper {
         for (Recipe<?> recipe : recipes) {
             String recipeType = recipe.getType().toString();
 
-            if (recipeType.startsWith("gtceu:")) {
+            if (recipeType.startsWith("gtceu:") || recipeType.startsWith("start:")) {
                 String machineType = recipeType.split(":")[1];
-                Map<String, Object> recipeData = extractRecipeData(recipe, registryAccess);
+                Map<String, Object> recipeData = extractRecipeData(recipe);
 
                 recipesByType
                         .computeIfAbsent(machineType, k -> new ArrayList<>())
@@ -83,13 +80,10 @@ public class StarDumper {
         }
     }
 
-    private Map<String, Object> extractRecipeData(Recipe<?> recipe, RegistryAccess registryAccess) {
+    private Map<String, Object> extractRecipeData(Recipe<?> recipe) {
         Map<String, Object> data = new HashMap<>();
         data.put("id", recipe.getId().toString());
-        data.put("inputs", recipe.getIngredients().toString());
-        data.put("outputs", recipe.getResultItem(registryAccess).toString());
-        data.put("duration", 360);
-        data.put("EUt", 120);
+        data.put("class", recipe.getClass().getSimpleName());
         return data;
     }
 
