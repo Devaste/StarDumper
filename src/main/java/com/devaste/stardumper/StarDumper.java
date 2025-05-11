@@ -47,44 +47,37 @@ public class StarDumper {
         RecipeManager recipeManager = event.getServer().getRecipeManager();
         Collection<Recipe<?>> recipes = recipeManager.getRecipes();
 
-        Map<String, List<Map<String, Object>>> recipesByType = new HashMap<>();
+        List<Map<String, Object>> gtRecipes = new ArrayList<>();
 
         for (Recipe<?> recipe : recipes) {
-            String recipeType = recipe.getType().toString();
+            // Проверяем принадлежность класса через getName()
+            if (recipe.getClass().getName().equals("com.gregtechceu.gtceu.api.recipe.GTRecipe")) {
+                Map<String, Object> recipeData = new HashMap<>();
+                recipeData.put("id", recipe.getId().toString());
 
-            if (recipeType.startsWith("gtceu:") || recipeType.startsWith("start:")) {
-                String machineType = recipeType.split(":")[1];
-                Map<String, Object> recipeData = extractRecipeData(recipe);
-
-                recipesByType
-                        .computeIfAbsent(machineType, k -> new ArrayList<>())
-                        .add(recipeData);
+                gtRecipes.add(recipeData);
             }
         }
 
+        // Если ничего не нашли — логируем и выходим
+        if (gtRecipes.isEmpty()) {
+            LOGGER.info("No GTCEu recipes found.");
+            return;
+        }
+
+        // Папка для дампов
         File outputDir = new File("config/star_recipe_dumps");
         if (!outputDir.exists()) outputDir.mkdirs();
 
-        for (Map.Entry<String, List<Map<String, Object>>> entry : recipesByType.entrySet()) {
-            String machineType = entry.getKey();
-            List<Map<String, Object>> machineRecipes = entry.getValue();
+        // Выводим всё в один файл gtceu_recipes.json
+        File outputFile = new File(outputDir, "gtceu_recipes.json");
 
-            File outputFile = new File(outputDir, machineType + ".json");
-
-            try (FileWriter writer = new FileWriter(outputFile)) {
-                GSON.toJson(machineRecipes, writer);
-                LOGGER.info("Saved recipes for " + machineType + " to " + outputFile.getPath());
-            } catch (IOException e) {
-                LOGGER.error("Failed to write recipes for " + machineType, e);
-            }
+        try (FileWriter writer = new FileWriter(outputFile)) {
+            GSON.toJson(gtRecipes, writer);
+            LOGGER.info("Saved GTCEu recipes to " + outputFile.getPath());
+        } catch (IOException e) {
+            LOGGER.error("Failed to write GTCEu recipes", e);
         }
-    }
-
-    private Map<String, Object> extractRecipeData(Recipe<?> recipe) {
-        Map<String, Object> data = new HashMap<>();
-        data.put("id", recipe.getId().toString());
-        data.put("class", recipe.getClass().getSimpleName());
-        return data;
     }
 
     @Mod.EventBusSubscriber(modid = MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
