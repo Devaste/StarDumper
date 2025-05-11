@@ -4,6 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraftforge.api.distmarker.Dist;
@@ -20,6 +23,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Stream;
 
 @Mod(StarDumper.MODID)
 public class StarDumper {
@@ -45,6 +49,7 @@ public class StarDumper {
 
     private void gatherRecipes(ServerStartingEvent event) {
         RecipeManager recipeManager = event.getServer().getRecipeManager();
+        RegistryAccess registryAccess = event.getServer().registryAccess();
         Collection<Recipe<?>> recipes = recipeManager.getRecipes();
 
         List<Map<String, Object>> gtRecipes = new ArrayList<>();
@@ -54,6 +59,7 @@ public class StarDumper {
             if (recipe.getClass().getName().equals("com.gregtechceu.gtceu.api.recipe.GTRecipe")) {
                 Map<String, Object> recipeData = new HashMap<>();
                 recipeData.put("id", recipe.getId().toString());
+                recipeData.put("type", recipe.getType().toString());
 
                 gtRecipes.add(recipeData);
             }
