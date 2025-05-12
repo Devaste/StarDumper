@@ -56,28 +56,30 @@ public class StarDumper {
         RecipeManager recipeManager = event.getServer().getRecipeManager();
         Collection<Recipe<?>> recipes = recipeManager.getRecipes();
 
-        List<Map<String, Object>> gtRecipes = new ArrayList<>();
+        // Grouped by machine type (recipe type)
+        Map<String, Map<String, Map<String, Object>>> groupedRecipes = new HashMap<>();
 
         for (Recipe<?> recipe : recipes) {
             if (recipe instanceof GTRecipe gtRecipe) {
                 try {
-                    Map<String, Object> recipeData = new HashMap<>();
-                    recipeData.put("id", gtRecipe.getId().toString());
-                    recipeData.put("recipeType", gtRecipe.getType().toString());
-                    recipeData.put("input_EUt", RecipeHelper.getInputEUt(gtRecipe));
-                    recipeData.put("output_EUt", RecipeHelper.getOutputEUt(gtRecipe));
-                    recipeData.put("duration", gtRecipe.duration);
-                    recipeData.put("minTier", RecipeHelper.getRecipeEUtTier(gtRecipe));
+                    String type = gtRecipe.getType().toString();
+                    String id = gtRecipe.getId().toString();
 
-                    // Defensive extraction for inputs (items + fluids)
+                    Map<String, Object> recipeData = new LinkedHashMap<>();
+
+                    // Defensive extraction for inputs (items + fluids) with only <100% chance annotation
                     List<String> inputList = new ArrayList<>();
-                    inputList.addAll(
-                        gtRecipe.getInputContents(ItemRecipeCapability.CAP).stream()
-                            .map(content -> ItemRecipeCapability.CAP.of(content.getContent()))
-                            .filter(ingredient -> ingredient.getItems().length > 0)
-                            .map(ingredient -> formatItemStack(ingredient.getItems()[0]))
-                            .collect(Collectors.toList())
-                    );
+                    for (var content : gtRecipe.getInputContents(ItemRecipeCapability.CAP)) {
+                        var cap = ItemRecipeCapability.CAP.of(content.getContent());
+                        if (cap.getItems().length > 0) {
+                            String itemStr = formatItemStack(cap.getItems()[0]);
+                            float chancePercent = 100f * content.chance / content.maxChance;
+                            if (chancePercent < 100.0f) {
+                                itemStr += String.format(", chance=[%.2f]", chancePercent);
+                            }
+                            inputList.add(itemStr);
+                        }
+                    }
                     inputList.addAll(
                         gtRecipe.getInputContents(FluidRecipeCapability.CAP).stream()
                             .map(content -> FluidRecipeCapability.CAP.of(content.getContent()))
@@ -87,15 +89,19 @@ public class StarDumper {
                     );
                     recipeData.put("inputs", inputList);
 
-                    // Defensive extraction for outputs (items + fluids)
+                    // Defensive extraction for outputs (items + fluids) with only <100% chance annotation
                     List<String> outputList = new ArrayList<>();
-                    outputList.addAll(
-                        gtRecipe.getOutputContents(ItemRecipeCapability.CAP).stream()
-                            .map(content -> ItemRecipeCapability.CAP.of(content.getContent()))
-                            .filter(ingredient -> ingredient.getItems().length > 0)
-                            .map(ingredient -> formatItemStack(ingredient.getItems()[0]))
-                            .collect(Collectors.toList())
-                    );
+                    for (var content : gtRecipe.getOutputContents(ItemRecipeCapability.CAP)) {
+                        var cap = ItemRecipeCapability.CAP.of(content.getContent());
+                        if (cap.getItems().length > 0) {
+                            String itemStr = formatItemStack(cap.getItems()[0]);
+                            float chancePercent = 100f * content.chance / content.maxChance;
+                            if (chancePercent < 100.0f) {
+                                itemStr += String.format(", chance=[%.2f]", chancePercent);
+                            }
+                            outputList.add(itemStr);
+                        }
+                    }
                     outputList.addAll(
                         gtRecipe.getOutputContents(FluidRecipeCapability.CAP).stream()
                             .map(content -> FluidRecipeCapability.CAP.of(content.getContent()))
@@ -105,14 +111,19 @@ public class StarDumper {
                     );
                     recipeData.put("outputs", outputList);
 
-                    gtRecipes.add(recipeData);
+                    recipeData.put("duration", gtRecipe.duration);
+                    recipeData.put("minTier", RecipeHelper.getRecipeEUtTier(gtRecipe));
+                    recipeData.put("input_EUt", RecipeHelper.getInputEUt(gtRecipe));
+                    recipeData.put("output_EUt", RecipeHelper.getOutputEUt(gtRecipe));
+
+                    groupedRecipes.computeIfAbsent(type, k -> new HashMap<>()).put(id, recipeData);
                 } catch (Exception e) {
-                    LOGGER.error("Failed to process GTCEu recipe: " + gtRecipe.getId(), e);
+                    LOGGER.error("Failed to process GTCEu recipe: " + recipe.getId(), e);
                 }
             }
         }
 
-        if (gtRecipes.isEmpty()) {
+        if (groupedRecipes.isEmpty()) {
             LOGGER.info("No GTCEu recipes found.");
             return;
         }
@@ -123,10 +134,10 @@ public class StarDumper {
         File outputFile = new File(outputDir, "gtceu_new_recipes.json");
 
         try (FileWriter writer = new FileWriter(outputFile)) {
-            GSON.toJson(gtRecipes, writer);
+            GSON.toJson(groupedRecipes, writer);
             LOGGER.info("Saved GTCEu recipes to " + outputFile.getPath());
         } catch (IOException e) {
-            LOGGER.error("Failed to write GTCEu recipes", e);
+            LOGGER.error("Failed to save GTCEu recipes", e);
         }
     }
 
