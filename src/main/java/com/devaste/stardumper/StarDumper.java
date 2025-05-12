@@ -2,6 +2,8 @@ package com.devaste.stardumper;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.gregtechceu.gtceu.api.capability.recipe.FluidRecipeCapability;
+import com.gregtechceu.gtceu.api.capability.recipe.ItemRecipeCapability;
 import com.gregtechceu.gtceu.api.recipe.GTRecipe;
 import com.gregtechceu.gtceu.api.recipe.RecipeHelper;
 import com.mojang.logging.LogUtils;
@@ -10,8 +12,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.level.material.Fluid;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.server.ServerStartingEvent;
@@ -28,6 +28,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Mod(StarDumper.MODID)
 public class StarDumper {
@@ -62,35 +63,51 @@ public class StarDumper {
                 try {
                     Map<String, Object> recipeData = new HashMap<>();
                     recipeData.put("id", gtRecipe.getId().toString());
-                    recipeData.put("duration", gtRecipe.duration);
+                    recipeData.put("recipeType", gtRecipe.getType().toString());
                     recipeData.put("input_EUt", RecipeHelper.getInputEUt(gtRecipe));
                     recipeData.put("output_EUt", RecipeHelper.getOutputEUt(gtRecipe));
-                    recipeData.put("ocLevel", gtRecipe.ocLevel);
-                    recipeData.put("recipeType", gtRecipe.getType().toString());
+                    recipeData.put("duration", gtRecipe.duration);
+                    recipeData.put("minTier", RecipeHelper.getRecipeEUtTier(gtRecipe));
 
-                    // Inputs
+                    // Defensive extraction for inputs (items + fluids)
                     List<String> inputList = new ArrayList<>();
-                    for (ItemStack stack : RecipeHelper.getInputItems(gtRecipe)) {
-                        inputList.add(formatItemStack(stack));
-                    }
-                    for (FluidStack fluid : RecipeHelper.getInputFluids(gtRecipe)) {
-                        inputList.add(formatFluidStack(fluid));
-                    }
+                    inputList.addAll(
+                        gtRecipe.getInputContents(ItemRecipeCapability.CAP).stream()
+                            .map(content -> ItemRecipeCapability.CAP.of(content.getContent()))
+                            .filter(ingredient -> ingredient.getItems().length > 0)
+                            .map(ingredient -> formatItemStack(ingredient.getItems()[0]))
+                            .collect(Collectors.toList())
+                    );
+                    inputList.addAll(
+                        gtRecipe.getInputContents(FluidRecipeCapability.CAP).stream()
+                            .map(content -> FluidRecipeCapability.CAP.of(content.getContent()))
+                            .filter(ingredient -> ingredient.getStacks().length > 0)
+                            .map(ingredient -> formatFluidStack(ingredient.getStacks()[0]))
+                            .collect(Collectors.toList())
+                    );
                     recipeData.put("inputs", inputList);
 
-                    // Outputs
+                    // Defensive extraction for outputs (items + fluids)
                     List<String> outputList = new ArrayList<>();
-                    for (ItemStack stack : RecipeHelper.getOutputItems(gtRecipe)) {
-                        outputList.add(formatItemStack(stack));
-                    }
-                    for (FluidStack fluid : RecipeHelper.getOutputFluids(gtRecipe)) {
-                        outputList.add(formatFluidStack(fluid));
-                    }
+                    outputList.addAll(
+                        gtRecipe.getOutputContents(ItemRecipeCapability.CAP).stream()
+                            .map(content -> ItemRecipeCapability.CAP.of(content.getContent()))
+                            .filter(ingredient -> ingredient.getItems().length > 0)
+                            .map(ingredient -> formatItemStack(ingredient.getItems()[0]))
+                            .collect(Collectors.toList())
+                    );
+                    outputList.addAll(
+                        gtRecipe.getOutputContents(FluidRecipeCapability.CAP).stream()
+                            .map(content -> FluidRecipeCapability.CAP.of(content.getContent()))
+                            .filter(ingredient -> ingredient.getStacks().length > 0)
+                            .map(ingredient -> formatFluidStack(ingredient.getStacks()[0]))
+                            .collect(Collectors.toList())
+                    );
                     recipeData.put("outputs", outputList);
 
                     gtRecipes.add(recipeData);
                 } catch (Exception e) {
-                    LOGGER.error("Failed to process GTCEu recipe: " + recipe.getId(), e);
+                    LOGGER.error("Failed to process GTCEu recipe: " + gtRecipe.getId(), e);
                 }
             }
         }
