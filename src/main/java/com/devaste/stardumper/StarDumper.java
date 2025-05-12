@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraftforge.api.distmarker.Dist;
@@ -48,7 +47,6 @@ public class StarDumper {
 
     private void gatherRecipes(ServerStartingEvent event) {
         RecipeManager recipeManager = event.getServer().getRecipeManager();
-        RegistryAccess registryAccess = event.getServer().registryAccess();
         Collection<Recipe<?>> recipes = recipeManager.getRecipes();
 
         List<Map<String, Object>> gtRecipes = new ArrayList<>();
@@ -196,9 +194,11 @@ public class StarDumper {
             } else if (className.equals("com.gregtechceu.gtceu.api.recipe.ingredient.SizedIngredient")) {
                 int amount = (int) actualContent.getClass().getMethod("getAmount").invoke(actualContent);
                 sb.append("SizedIngredient{amount=").append(amount).append(", items=[");
-                boolean foundAny = extractItemsRecursive(actualContent, sb, 0);
-                if (!foundAny) {
-                    sb.append("class=").append(actualContent.getClass().getName());
+                List<String> itemKeys = new ArrayList<>();
+                extractItemKeysRecursive(actualContent, itemKeys, 0);
+                for (int i = 0; i < itemKeys.size(); i++) {
+                    sb.append(itemKeys.get(i));
+                    if (i < itemKeys.size() - 1) sb.append(", ");
                 }
                 sb.append("]}");
             } else {
@@ -230,9 +230,9 @@ public class StarDumper {
         return sb.toString();
     }
 
-    // Recursively extract items from SizedIngredient or Ingredient, walking class hierarchy and unwrapping inner fields
-    private boolean extractItemsRecursive(Object ingredient, StringBuilder sb, int depth) {
-        if (depth > 10 || ingredient == null) return false; // Prevent infinite recursion
+    // Recursively extract item registry keys from SizedIngredient or Ingredient
+    private void extractItemKeysRecursive(Object ingredient, List<String> itemKeys, int depth) {
+        if (depth > 10 || ingredient == null) return;
         try {
             // Try getItems() via public or declared method on this class or superclasses
             Class<?> clazz = ingredient.getClass();
@@ -252,18 +252,14 @@ public class StarDumper {
             }
             if (getItemsMethod != null) {
                 Object[] itemStacks = (Object[]) getItemsMethod.invoke(ingredient);
-                boolean foundAny = false;
                 if (itemStacks.length > 0) {
                     for (Object itemStack : itemStacks) {
                         Object item = itemStack.getClass().getMethod("getItem").invoke(itemStack);
-                        int count = (int) itemStack.getClass().getMethod("getCount").invoke(itemStack);
                         String itemKey = resolveItemKey(item);
-                        sb.append(itemKey).append(" x").append(count).append(", ");
-                        foundAny = true;
+                        if (!itemKeys.contains(itemKey)) itemKeys.add(itemKey);
                     }
-                    if (foundAny) return true;
+                    return;
                 }
-                // If getItems() returns empty, fallback to toJson
             }
         } catch (Throwable t) {
             // ignore, try fallback below
@@ -273,15 +269,13 @@ public class StarDumper {
             Field innerField = ingredient.getClass().getDeclaredField("inner");
             innerField.setAccessible(true);
             Object inner = innerField.get(ingredient);
-            boolean found = extractItemsRecursive(inner, sb, depth + 1);
-            if (found) return true;
+            extractItemKeysRecursive(inner, itemKeys, depth + 1);
         } catch (Throwable t2) {
-            // ignore, try fallback below
+            // ignore
         }
         // Try all declared fields that are arrays (especially obfuscated ones)
         try {
             java.lang.reflect.Field[] fields = ingredient.getClass().getDeclaredFields();
-            boolean foundAny = false;
             for (java.lang.reflect.Field f : fields) {
                 f.setAccessible(true);
                 Object value = f.get(ingredient);
@@ -291,10 +285,8 @@ public class StarDumper {
                         if (obj != null) {
                             try {
                                 Object item = obj.getClass().getMethod("getItem").invoke(obj);
-                                int count = (int) obj.getClass().getMethod("getCount").invoke(obj);
                                 String itemKey = resolveItemKey(item);
-                                sb.append(itemKey).append(" x").append(count).append(", ");
-                                foundAny = true;
+                                if (!itemKeys.contains(itemKey)) itemKeys.add(itemKey);
                             } catch (Throwable t) {
                                 // not an ItemStack, skip
                             }
@@ -302,7 +294,6 @@ public class StarDumper {
                     }
                 }
             }
-            if (foundAny) return true;
         } catch (Throwable t) {
             // ignore
         }
@@ -311,20 +302,16 @@ public class StarDumper {
             java.lang.reflect.Method getValuesMethod = ingredient.getClass().getDeclaredMethod("getValues");
             getValuesMethod.setAccessible(true);
             Object[] values = (Object[]) getValuesMethod.invoke(ingredient);
-            boolean foundAny = false;
             for (Object value : values) {
                 java.lang.reflect.Method createItemStackMethod = value.getClass().getDeclaredMethod("createItemStack");
                 createItemStackMethod.setAccessible(true);
                 Object itemStack = createItemStackMethod.invoke(value);
                 Object item = itemStack.getClass().getMethod("getItem").invoke(itemStack);
-                int count = (int) itemStack.getClass().getMethod("getCount").invoke(itemStack);
                 String itemKey = resolveItemKey(item);
-                sb.append(itemKey).append(" x").append(count).append(", ");
-                foundAny = true;
+                if (!itemKeys.contains(itemKey)) itemKeys.add(itemKey);
             }
-            if (foundAny) return true;
         } catch (Throwable t) {
-            // ignore, try fallback below
+            // ignore
         }
         // Try CraftTweaker getItemStacks/getValues methods
         try {
@@ -335,89 +322,19 @@ public class StarDumper {
                     Object result = m.invoke(ingredient);
                     if (result instanceof Object[]) {
                         Object[] itemStacks = (Object[]) result;
-                        boolean foundAny = false;
                         for (Object itemStack : itemStacks) {
                             Object item = itemStack.getClass().getMethod("getItem").invoke(itemStack);
-                            int count = (int) itemStack.getClass().getMethod("getCount").invoke(itemStack);
                             String itemKey = resolveItemKey(item);
-                            sb.append(itemKey).append(" x").append(count).append(", ");
-                            foundAny = true;
+                            if (!itemKeys.contains(itemKey)) itemKeys.add(itemKey);
                         }
-                        if (foundAny) return true;
                     }
                 } catch (Throwable t) {
-                    // ignore, try next
+                    // ignore
                 }
             }
         } catch (Throwable t) {
             // ignore
         }
-        // Try all methods that return arrays
-        try {
-            java.lang.reflect.Method[] methods = ingredient.getClass().getDeclaredMethods();
-            for (java.lang.reflect.Method m : methods) {
-                if (m.getParameterCount() == 0 && m.getReturnType().isArray()) {
-                    m.setAccessible(true);
-                    Object result = m.invoke(ingredient);
-                    if (result instanceof Object[]) {
-                        Object[] arr = (Object[]) result;
-                        boolean foundAny = false;
-                        for (Object obj : arr) {
-                            // Try to treat as ItemStack
-                            try {
-                                Object item = obj.getClass().getMethod("getItem").invoke(obj);
-                                int count = (int) obj.getClass().getMethod("getCount").invoke(obj);
-                                String itemKey = resolveItemKey(item);
-                                sb.append(itemKey).append(" x").append(count).append(", ");
-                                foundAny = true;
-                            } catch (Throwable t) {
-                                // not an ItemStack, skip
-                            }
-                        }
-                        if (foundAny) return true;
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            // ignore
-        }
-        // Fallback to toJson and parse
-        try {
-            Object jsonObj = ingredient.getClass().getMethod("toJson").invoke(ingredient);
-            String jsonStr = jsonObj.toString();
-            // Try to extract item IDs from JSON
-            if (jsonStr.contains("\"item\"")) {
-                java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\\"item\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"").matcher(jsonStr);
-                boolean foundAny = false;
-                while (m.find()) {
-                    sb.append(m.group(1)).append(" x1, "); // Default to 1 if count not present
-                    foundAny = true;
-                }
-                if (foundAny) return true;
-            }
-            sb.append("json:").append(jsonStr);
-            return true;
-        } catch (Throwable t3) {
-            // As a last resort, print class structure and toString
-            try {
-                sb.append("debug:class=").append(ingredient.getClass().getName()).append(", ");
-                java.lang.reflect.Method[] methods = ingredient.getClass().getDeclaredMethods();
-                sb.append("methods=[");
-                for (java.lang.reflect.Method m : methods) {
-                    sb.append(m.getName()).append(", ");
-                }
-                sb.append("], fields=[");
-                java.lang.reflect.Field[] fields = ingredient.getClass().getDeclaredFields();
-                for (java.lang.reflect.Field f : fields) {
-                    sb.append(f.getName()).append(", ");
-                }
-                sb.append("], toString=").append(ingredient.toString());
-                return true;
-            } catch (Throwable t4) {
-                sb.append("error:").append(t4.getClass().getName()).append(", ");
-            }
-        }
-        return false;
     }
 
     // Helper to resolve item registry key
