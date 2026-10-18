@@ -20,16 +20,20 @@ public class RecipeWriter {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
     public static void writeRecipesToFile(Map<String, Map<String, Map<String, Object>>> groupedRecipes) {
+        writeJson("gtceu_new_recipes.json", groupedRecipes);
+    }
+
+    public static void writeJson(String fileName, Object data) {
         File outputDir = new File("config/star_recipe_dumps");
         if (!outputDir.exists()) outputDir.mkdirs();
 
-        File outputFile = new File(outputDir, "gtceu_new_recipes.json");
+        File outputFile = new File(outputDir, fileName);
 
         try (FileWriter writer = new FileWriter(outputFile)) {
-            GSON.toJson(groupedRecipes, writer);
-            LOGGER.info("Saved recipes to {}", outputFile.getPath());
+            GSON.toJson(data, writer);
+            LOGGER.info("Saved {}", outputFile.getPath());
         } catch (IOException e) {
-            LOGGER.error("Failed to save GTCEu recipes", e);
+            LOGGER.error("Failed to save {}", fileName, e);
         }
     }
 }

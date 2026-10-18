@@ -42,5 +42,11 @@ public class RecipeExportManager {
         }
 
         RecipeWriter.writeRecipesToFile(groupedRecipes);
+
+        try {
+            RecipeWriter.writeJson("gtceu_machines.json", MachineExtractor.extract());
+        } catch (Exception e) {
+            LOGGER.error("Failed to export GTCEu machines", e);
+        }
     }
 }
