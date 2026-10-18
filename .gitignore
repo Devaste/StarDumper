@@ -23,3 +23,7 @@ run
 
 # Files from Forge MDK
 forge*changelog.txt
+
+# pack jars (copy from the Star Technology mods folder)
+libs/gtceu-st-*.jar
+libs/ldlib-forge-*.jar

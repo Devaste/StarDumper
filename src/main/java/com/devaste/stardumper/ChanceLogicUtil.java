@@ -5,6 +5,7 @@ import com.gregtechceu.gtceu.api.recipe.content.Content;
 import com.gregtechceu.gtceu.api.capability.recipe.RecipeCapability;
 import com.gregtechceu.gtceu.api.capability.recipe.IO;
 import com.gregtechceu.gtceu.api.recipe.chance.logic.ChanceLogic;
+import com.gregtechceu.gtceu.api.registry.GTRegistries;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,7 +45,8 @@ public final class ChanceLogicUtil {
 
             if (isChanced) {
                 ChanceLogic logic = gtRecipe.getChanceLogicForCapability(cap, io, isTick);
-                result.put(cap.getClass().getSimpleName(), logic.toString());
+                String logicName = GTRegistries.CHANCE_LOGICS.getKey(logic);
+                result.put(cap.getClass().getSimpleName(), logicName != null ? logicName : logic.toString());
             }
         }
 

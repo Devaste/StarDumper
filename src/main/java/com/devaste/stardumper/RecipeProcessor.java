@@ -3,6 +3,7 @@ package com.devaste.stardumper;
 import com.gregtechceu.gtceu.api.capability.recipe.IO;
 import com.gregtechceu.gtceu.api.recipe.GTRecipe;
 import com.gregtechceu.gtceu.api.recipe.RecipeHelper;
+import com.gregtechceu.gtceu.api.recipe.ingredient.EnergyStack;
 
 import java.util.*;
 
@@ -29,8 +30,15 @@ public class RecipeProcessor {
 
         recipeData.put("duration", gtRecipe.duration);
         recipeData.put("minTier", RecipeHelper.getRecipeEUtTier(gtRecipe));
-        recipeData.put("input_EUt", RecipeHelper.getInputEUt(gtRecipe));
-        recipeData.put("output_EUt", RecipeHelper.getOutputEUt(gtRecipe));
+        // GTM 1.7 (StarT fork) returns EnergyStack (voltage x amperage) instead of a plain long
+        EnergyStack inputEUt = gtRecipe.getInputEUt();
+        EnergyStack outputEUt = gtRecipe.getOutputEUt();
+        recipeData.put("input_EUt", inputEUt.getTotalEU());
+        recipeData.put("output_EUt", outputEUt.getTotalEU());
+        if (inputEUt.amperage() > 1)
+            recipeData.put("input_amperage", inputEUt.amperage());
+        if (outputEUt.amperage() > 1)
+            recipeData.put("output_amperage", outputEUt.amperage());
 
         Map<String, Object> coilLogic = CoilLogicExtractor.extractCoilLogic(gtRecipe);
         if (!coilLogic.isEmpty())
