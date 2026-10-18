@@ -44,6 +44,8 @@ public class RecipeProcessor {
         if (!coilLogic.isEmpty())
             recipeData.put("coils", List.of(coilLogic));
 
+        FullRecipeExtractor.addFullData(gtRecipe, recipeData);
+
         return recipeData;
     }
 }
