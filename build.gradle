@@ -168,8 +168,10 @@ dependencies {
     // For more info:
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
     // http://www.gradle.org/docs/current/userguide/dependency_management.html
-    // GTCEu
-    implementation "com.gregtechceu.gtceu:gtceu-${minecraft_version}:${gtm_version}"
+    // GTCEu: Star Technology ships its own GTM fork (GTM-StarT-Fork), so compile against the jars from the pack.
+    // Copy gtceu-st-1.20.1-<version>.jar and ldlib-forge-1.20.1-<version>.jar from the pack's mods/ folder into libs/.
+    compileOnly fg.deobf("blank:gtceu-st-${minecraft_version}:${gtm_version}")
+    compileOnly fg.deobf("blank:ldlib-forge-${minecraft_version}:${ldlib_version}")
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
