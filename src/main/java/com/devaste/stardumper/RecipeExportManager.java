@@ -50,6 +50,12 @@ public class RecipeExportManager {
         }
 
         try {
+            RecipeWriter.writeJson("gtceu_layouts.json", LayoutExtractor.extract());
+        } catch (Exception e) {
+            LOGGER.error("Failed to export layouts", e);
+        }
+
+        try {
             RecipeWriter.writeJson("gtceu_names.json", NameExtractor.extract());
         } catch (Exception e) {
             LOGGER.error("Failed to export names", e);
