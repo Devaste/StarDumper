@@ -10,6 +10,8 @@ import com.gregtechceu.gtceu.api.machine.MachineDefinition;
 import com.gregtechceu.gtceu.api.machine.MultiblockMachineDefinition;
 import com.gregtechceu.gtceu.api.pattern.BlockPattern;
 import com.gregtechceu.gtceu.api.pattern.MultiblockShapeInfo;
+import com.gregtechceu.gtceu.api.pattern.TraceabilityPredicate;
+import com.gregtechceu.gtceu.api.pattern.predicates.SimplePredicate;
 import com.gregtechceu.gtceu.api.registry.GTRegistries;
 import com.lowdragmc.lowdraglib.utils.BlockInfo;
 import com.mojang.logging.LogUtils;
@@ -19,6 +21,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 
+import java.lang.reflect.Field;
 import java.util.*;
 
 /**
@@ -58,6 +61,7 @@ public class LayoutExtractor {
                 }
                 data.put("variable_length", variable);
                 if (variable) data.put("aisle_repetitions", reps);
+                data.put("allowed_parts", allowedParts(pattern));
             } catch (Throwable e) {
                 data.put("pattern_error", e.toString());
             }
@@ -74,6 +78,58 @@ public class LayoutExtractor {
             result.put(def.getId().toString(), data);
         }
         return result;
+    }
+
+    /**
+     * For each machine part (hatch, bus, ME part...) that the pattern accepts, the number of pattern
+     * positions where it may be placed and the tightest global limit on it, read from the predicates.
+     */
+    private static Map<String, Object> allowedParts(BlockPattern pattern) throws ReflectiveOperationException {
+        Field field = BlockPattern.class.getDeclaredField("blockMatches");
+        field.setAccessible(true);
+        TraceabilityPredicate[][][] matches = (TraceabilityPredicate[][][]) field.get(pattern);
+        Map<String, Integer> positions = new TreeMap<>();
+        Map<String, Integer> maxCount = new TreeMap<>();
+        Map<String, Integer> minCount = new TreeMap<>();
+        for (TraceabilityPredicate[][] aisle : matches) {
+            for (TraceabilityPredicate[] row : aisle) {
+                for (TraceabilityPredicate predicate : row) {
+                    if (predicate == null) continue;
+                    Set<String> here = new HashSet<>();
+                    List<SimplePredicate> all = new ArrayList<>(predicate.common);
+                    all.addAll(predicate.limited);
+                    for (SimplePredicate simple : all) {
+                        if (simple.candidates == null) continue;
+                        BlockInfo[] candidates;
+                        try {
+                            candidates = simple.candidates.get();
+                        } catch (Throwable e) {
+                            continue;
+                        }
+                        if (candidates == null) continue;
+                        for (BlockInfo info : candidates) {
+                            if (info == null) continue;
+                            Block block = info.getBlockState().getBlock();
+                            if (!(block instanceof MetaMachineBlock)) continue;
+                            String id = String.valueOf(ForgeRegistries.BLOCKS.getKey(block));
+                            here.add(id);
+                            if (simple.maxCount > 0) maxCount.merge(id, simple.maxCount, Math::min);
+                            if (simple.minCount > 0) minCount.merge(id, simple.minCount, Math::max);
+                        }
+                    }
+                    for (String id : here) positions.merge(id, 1, Integer::sum);
+                }
+            }
+        }
+        Map<String, Object> out = new TreeMap<>();
+        positions.forEach((id, count) -> {
+            Map<String, Object> part = new LinkedHashMap<>();
+            part.put("positions", count);
+            if (maxCount.containsKey(id)) part.put("max", maxCount.get(id));
+            if (minCount.containsKey(id)) part.put("min", minCount.get(id));
+            out.put(id, part);
+        });
+        return out;
     }
 
     private static Map<String, Object> shape(BlockInfo[][][] blocks, Block controller) {
